@@ -1,0 +1,596 @@
+Введение:
+Дана мастер-таблица, содержащая результаты маркетингового опроса по методу идеальной точки. Респонденты характеризуются полом, возрастом и. местом прохождения опроса (ст. метро).
+
+Цель: Определить и обосновать выбор метода отбора выборочной совокупности, для получения наиболее устойчивого результата опроса
+
+Ход работы:
+
+Задание 1: Установить зерно генератора случайных чисел равное 100
+
+set.seed(100)
+Задание 2: загрузить материалы индивидуального проекта
+
+load(file= "/Users/arinatyumentseva/Desktop/3 курс/Лабораторная работа №2/Вариант25_Б22-701_Тюменцева.RData")
+head(Result)
+
+str(Result)
+
+Для генеральной совокупности провести расчет баллов отклонения от идеальной точки
+
+
+deviations <- data.frame(matrix(nrow = nrow(Result), ncol = 4))
+rownames(deviations) <- rownames(Result)
+marketplace_names = c('Ozon', 'Яндекс Маркет', 'Wildberries', 'Сбер Мегамаркет')
+names(deviations) = marketplace_names
+ideal = Result[, 6:11]
+ideal_importance = Result[,12:17]
+ozon = Result[, 18:23]
+yandex_market = Result[, 24:29]
+wildberries = Result[, 30:35]
+sber_megamarket = Result[, 36:41]
+for (i in 1:length(Result[,1])){
+  deviations[i, 1] = sum(abs(ozon[i,] - ideal[i,]) * ideal_importance[i, ])
+  deviations[i, 2] = sum(abs(yandex_market[i,] - ideal[i,]) * ideal_importance[i, ])
+  deviations[i, 3] = sum(abs(wildberries[i,] - ideal[i,]) * ideal_importance[i, ])
+  deviations[i, 4] = sum(abs(sber_megamarket[i,] - ideal[i,]) * ideal_importance[i, ])
+}
+head(deviations)
+
+Определите по генеральной совокупности бренд, обладающий наибольшим приближением к пользовательскому идеалу. Будем в дальнейшем ориентироваться на разброс данного столбца.
+library(DescTools)
+
+stat <- data.frame(matrix(nrow = 5, ncol = 4))
+rownames(stat) <- c("Выборочное среднее", "Медиана", "Мода", "Усеченное среднее", "Дисперсия")
+names(stat) <- marketplace_names
+
+for (i in 1:length(marketplace_names)) {
+  D <- deviations[, i] 
+  
+  stat[1, i] <- mean(D)                       
+  stat[2, i] <- median(D)                         
+  modes <- DescTools::Mode(D)                    
+  stat[3, i] <- modes[which.min(abs(modes - median(D)))]  
+  stat[4, i] <- mean(D, trim = 0.05)         
+  stat[5, i] <- var(D)                     
+}
+head(stat)
+
+Сбер Мегамаркет обладает наибольшим приближением к пользовательскому идеалу (наименьшее выборочное среднее).
+
+Отобрать разведочную совокупность для оценки дисперсии.
+dataset <- cbind(deviations, Result)
+colnames(dataset)[colnames(dataset) == "Возрастная група"] <- "Возрастная_группа"
+
+Организовать отбор выборок по каждому из способов в соответствии с определённым количеством элементов. Используемый алгоритм и реализующий его код должен предполагать многократное его использование, для перепроведения отбора, при изменении объема выборки
+library(dplyr)
+
+library(digest)
+
+conflicted::conflict_prefer("filter", "dplyr")
+
+random_selection_repeat <- function(dataset, sample_size) {
+  sampled_data <- dataset[sample(1:nrow(dataset), sample_size, replace = TRUE), ]
+  return(sampled_data)
+}
+
+random_selection <- function(dataset, sample_size) {
+  sampled_data <- dataset[sample(1:nrow(dataset), sample_size, replace = FALSE), ]
+  return(sampled_data)
+}
+
+mechanical_selection <- function(dataset, sample_size) {
+  interval <- floor(nrow(dataset) / sample_size)
+  step = sample(1:interval, 1)
+  indices <- seq(nrow(dataset) - step * sample_size + 1, nrow(dataset), by = step)
+  indices <- indices[1:sample_size]
+  sampled_data <- dataset[indices, ]
+  return(sampled_data)
+}
+
+
+typical_selection <- function(dataset, sample_size) {
+  size_per_group <- floor(sample_size / n_distinct(dataset$Пол) / n_distinct(dataset$Возрастная_группа))
+  sampled_data <- dataset %>%
+    group_by(Пол, Возрастная_группа) %>%
+    sample_n(size = min(size_per_group, n()), replace = FALSE) %>%
+    ungroup()
+  
+  return(sampled_data)
+}
+
+
+typical_selection_repeat <- function(dataset, sample_size) {
+  size_per_group <- floor(sample_size / n_distinct(dataset$Пол) / n_distinct(dataset$Возрастная_группа))
+  
+  sampled_data <- dataset %>%
+    group_by(Пол, Возрастная_группа) %>%
+    sample_n(size = min(size_per_group, n()), replace = FALSE) %>%
+    ungroup()
+  
+  return(sampled_data)
+}
+
+serial_selection_repeat <- function(dataset, num_group) {
+  random_stations <- sample(unique(dataset$Станция), num_group, replace = TRUE)
+  filtered_data <- dataset %>% 
+    filter(Станция %in% random_stations)
+  return(filtered_data)
+}
+
+serial_selection <- function(dataset, num_group) {
+  random_stations <- sample(unique(dataset$Станция), num_group, replace = FALSE)
+  filtered_data <- dataset %>% 
+    filter(Станция %in% random_stations)
+  return(filtered_data)
+}
+Отобрать разведочную совокупность для оценки дисперсии.
+
+
+calculate_variance <- function(sample_data, param) {
+if (param == "Тип") {
+  group_data <- sample_data %>%
+    group_by(across(all_of(c("Пол", "Возрастная_группа")))) %>%
+    summarise(
+      group_size = n(),
+      group_variance = var(`Сбер Мегамаркет`, na.rm = TRUE),
+      .groups = 'drop'
+    )
+
+  weighted_variance <- sum(group_data$group_variance * group_data$group_size, na.rm = TRUE) / sum(group_data$group_size, na.rm = TRUE)
+
+  return(weighted_variance)
+} else if (param == "Сер") {
+   group_data <- sample_data %>%
+   group_by(Станция) %>%
+      summarise(group_mean = mean(`Сбер Мегамаркет`, na.rm = TRUE), .groups = 'drop')
+      overall_mean <- mean(group_data$group_mean, na.rm = TRUE)
+      between_group_variance <- sum((group_data$group_mean - overall_mean)^2 * nrow(group_data)) / nrow(sample_data)
+   return(between_group_variance)
+   
+  } else {
+    return(var(sample_data[['Сбер Мегамаркет']], na.rm = TRUE))
+  }
+}
+Подсчёт среднего количества людей на станции
+
+average_people_per_station <- dataset %>%
+  group_by(Станция) %>%
+  summarise(count = n()) %>%
+  summarise(mean_people = mean(count)) %>%
+  pull(mean_people)
+average_people <- round(52.8169)  # Получаем 53
+
+print(average_people_per_station) 
+
+sample_size <- 600
+num_group <- floor(sample_size / 52) + 1
+sample_info <- data.frame(
+   Отбор = c("Случайный бесповторный", "Случайный повторный", "Механический бесповторный", "Серийная бесповторная", "Серийная повторная", "Типическая бесповторная", "Типическая повторная"),
+  Число_элементов = NA,
+  Дисперсия = NA
+)
+
+random_data <- random_selection_repeat(dataset, sample_size)
+sample_info$Число_элементов[1] <- nrow(random_data)
+sample_info$Дисперсия[1] <- calculate_variance(random_data, "СлучМех")
+
+sample_info$Число_элементов[2] <- sample_info$Число_элементов[1]
+sample_info$Дисперсия[2] <- sample_info$Дисперсия[1]
+
+mechanical_data <- mechanical_selection(dataset, sample_size)
+sample_info$Число_элементов[3] <- sample_info$Число_элементов[1]
+sample_info$Дисперсия[3] <- sample_info$Дисперсия[1]
+
+serial_data <- serial_selection_repeat(dataset, num_group)
+sample_info$Число_элементов[4] <- nrow(serial_data)
+sample_info$Дисперсия[4] <- calculate_variance(serial_data, "Сер")
+
+serial_repeat_data <- serial_selection_repeat(dataset, num_group)
+sample_info$Число_элементов[5] <- sample_info$Число_элементов[4]
+sample_info$Дисперсия[5] <- sample_info$Дисперсия[4] 
+
+typical_data <- typical_selection_repeat(dataset, sample_size)
+sample_info$Число_элементов[6] <- sample_info$Число_элементов[1]
+sample_info$Дисперсия[6] <- sample_info$Дисперсия[1]
+
+typical_repeat_data <- typical_selection_repeat(dataset, sample_size)
+sample_info$Число_элементов[7] <- sample_info$Число_элементов[6]
+sample_info$Дисперсия[7] <- sample_info$Дисперсия[6]
+
+print(sample_info)
+
+Оцените устойчивость результатов по разведочной совокупности – для этого, для каждого метода необходимо провести дополнительные многократные (100 раз) отборы (по правилам пункта 3), и сделать расчет сколько раз каждая из альтернатив оказывается наиболее близкой к пользовательским ожиданиям (по оценке среднего).
+library(dplyr)
+
+calculate_means <- function(dataset) {
+  mean_values <- c(
+    oz = mean(dataset$`Ozon`, na.rm = TRUE),
+    yam = mean(dataset$`Яндекс Маркет`, na.rm = TRUE),
+    wb = mean(dataset$`Wildberries`, na.rm = TRUE),
+    sber = mean(dataset$`Сбер Мегамаркет`, na.rm = TRUE)
+  )
+  return(mean_values)
+}
+
+  
+random <- c(oz = 0, yam = 0, wb = 0, sber=0)
+random_repeat <- c(oz = 0, yam = 0, wb = 0, sber=0)
+mechanical <- c(oz = 0, yam = 0, wb = 0, sber=0)
+typical <- c(oz = 0, yam = 0, wb = 0, sber=0)
+typical_repeat <- c(oz = 0, yam = 0, wb = 0, sber=0)
+serial <- c(oz = 0, yam = 0, wb = 0, sber=0)
+serial_repeat <- c(oz = 0, yam = 0, wb = 0, sber=0)
+
+
+for (i in 1:1000) {
+random_sample <- random_selection(dataset, sample_size)
+random_for_means <- calculate_means(random_sample)
+random_repeat_sample <- random_selection_repeat(dataset, sample_size)
+random_repeat_for_means <- calculate_means(random_repeat_sample)
+mechanical_sample <- mechanical_selection(dataset, sample_size)
+mechanical_for_means <- calculate_means(mechanical_sample )
+typical_repeat_sample <-typical_selection_repeat(dataset, sample_size)
+typical_repeat_for_means <- calculate_means(typical_repeat_sample)
+typical_sample <- typical_selection(dataset, sample_size)
+typical_for_means <- calculate_means(typical_sample)
+serial_repeat_sample <- serial_selection_repeat(dataset, num_group)
+serial_repeat_for_means <- calculate_means(serial_repeat_sample)
+serial_sample <- serial_selection(dataset, num_group)
+serial_for_means <- calculate_means(serial_sample)
+
+random_winner <- names(random_for_means)[which.min(random_for_means)]
+random_repeat_winner <- names(random_repeat_for_means)[which.min(random_repeat_for_means)]
+mechanical_winner <- names(mechanical_for_means)[which.min(mechanical_for_means)]
+typical_winner <- names(typical_for_means)[which.min(typical_for_means)]
+typical_repeat_winner <-names(typical_repeat_for_means)[which.min(typical_repeat_for_means)]
+serial_winner <- names(serial_for_means)[which.min(serial_for_means)]
+serial_repeat_winner <- names(serial_repeat_for_means)[which.min(serial_repeat_for_means)]
+  
+
+random[random_winner] <- random[random_winner] + 1
+random_repeat[random_repeat_winner] <- random_repeat[random_repeat_winner] + 1
+mechanical[mechanical_winner] <- mechanical[mechanical_winner] + 1
+typical[typical_winner] <- typical[typical_winner] + 1
+typical_repeat[typical_repeat_winner] <- typical_repeat[typical_repeat_winner] + 1
+serial[serial_winner] <- serial[serial_winner] + 1
+serial_repeat[serial_repeat_winner] <- serial_repeat[serial_repeat_winner] + 1
+  
+}
+
+cat("Результаты случайного бесповторного отбора:\n")
+
+print(random)
+cat("Результаты случайного повторного отбора:\n")
+
+print(random_repeat)
+
+cat("\nРезультаты механического отбора:\n")
+
+print(mechanical)
+
+cat("\nРезультаты типического бесповторного отбора:\n")
+
+print(typical)
+cat("\nРезультаты типического повторного отбора:\n")
+
+print(typical_repeat)
+
+cat("\nРезультаты серийного бесповторного отбора:\n")
+
+print(serial)
+
+cat("\nРезультаты серийного повторного отбора:\n")
+
+print(serial_repeat)
+
+Так как используется выборочная оценка, а не дисперсия генеральной совокупности, используемая здесь и далее квантиль выбирается по таблице (функции) распределения Стьюдента . Вероятность принять равную 0,05, — размер разведочной совокупности.
+head(sample_info)
+
+alpha <- 0.05      
+sample_info$Квантиль <- qt(1 - alpha / 2, sample_info$Число_элементов - 1)
+head(sample_info)
+
+print(sample_info$Квантиль)
+
+Рассчитать предельную ошибку среднего, для каждого метода, на основе полученных в пункте 5) оценок дисперсий.
+Предельная ошибка оценивания параметра «генеральной» совокупности (мат. ожидания):
+
+
+
+Cлучайный повторный отбор:
+
+
+
+Механический и случайный бесповторный отбор:
+
+
+
+Типический повторный отбор:
+
+
+
+Типический бесповторный отбор:
+
+
+
+Серийный повторный отбор:
+
+
+
+Серийный бесповторный отбор:
+
+
+
+sample_info <- sample_info %>%
+  mutate(
+    mu = case_when(
+      Отбор == "Случайный бесповторный" ~ Квантиль * sqrt(Дисперсия / Число_элементов) * sqrt(1 - Число_элементов / nrow(deviations)),
+      Отбор == "Случайный повторный" ~ Квантиль * sqrt(Дисперсия / Число_элементов),
+      Отбор == "Механический бесповторный" ~ Квантиль * sqrt(Дисперсия / Число_элементов) * sqrt(1 - Число_элементов / nrow(deviations)),
+      Отбор == "Серийная бесповторная" ~ Квантиль * sqrt(Дисперсия / num_group) * sqrt(1 - num_group / length(unique(Result$Станция))),
+      Отбор == "Серийная повторная" ~ Квантиль * sqrt(Дисперсия / num_group),
+      Отбор == "Типическая бесповторная" ~ Квантиль * sqrt(Дисперсия / Число_элементов) * sqrt(1 - Число_элементов / nrow(deviations)),
+      Отбор == "Типическая повторная" ~ Квантиль * sqrt(Дисперсия / Число_элементов) ,
+      TRUE ~ NA_real_
+    )
+  )
+head(sample_info)
+
+Полученная Вами оценка предельной ошибки является значительно большей, нежели предельная ошибка генеральной совокупности, для получения эффекта от определения минимального эффективного размера выборки используйте уменьшенное в 2 раза значение оценки предельной ошибки.
+sample_info$mu_half <- sample_info$mu / 2
+head(sample_info)
+
+На основе оценки дисперсии и уменьшенной оценки предельной ошибки определить минимальный объем выборки при заданной в варианте вероятности для 7 типов отбора:
+В нашей лабораторной будет использован второй подход.
+
+Объём выборки n на основании предельной ошибки оценивания мат.ожидания:
+
+
+
+Cлучайный повторный отбор:
+
+
+
+Механический и случайный бесповторный отбор:
+
+
+Типический повторный отбор:
+
+
+
+Типический бесповторный отбор:
+
+
+
+Серийный повторный отбор:
+
+
+
+Серийный бесповторный отбор:
+
+
+
+sample_info <- sample_info %>%
+  mutate(
+    nr_min = case_when(
+      Отбор == "Случайный бесповторный" ~ ceiling((Квантиль ^ 2) * Дисперсия * nrow(deviations) / (mu_half ^ 2 * nrow(deviations) + Квантиль ^ 2 * Дисперсия)),
+      Отбор == "Случайный повторный" ~ ceiling((Квантиль ^ 2) * Дисперсия / mu_half ^ 2),
+      Отбор == "Механический бесповторный" ~ ceiling((Квантиль ^ 2) * Дисперсия * nrow(deviations) / (mu_half ^ 2 * nrow(deviations) + Квантиль ^ 2 * Дисперсия)),
+      Отбор == "Серийная бесповторная" ~ ceiling((Квантиль ^ 2) * length(unique(Result$Станция)) * Дисперсия / ((mu_half ^ 2) * length(unique(Result$Станция)) + Дисперсия * (Квантиль ^ 2))),
+      Отбор == "Серийная повторная" ~ ceiling((Квантиль ^ 2) * Дисперсия / (mu_half ^ 2)),
+      Отбор == "Типическая бесповторная" ~ ceiling((Квантиль ^ 2) * nrow(deviations) * Дисперсия / ((mu_half ^ 2) * nrow(deviations) + Дисперсия * (Квантиль ^ 2))),
+      Отбор == "Типическая повторная" ~ ceiling((Квантиль ^ 2) * Дисперсия / (mu_half ^ 2)),
+      TRUE ~ NA_real_
+    )
+  )
+head(sample_info)
+
+Использовать каждый способ отбора не менее 1000 раз (для механического сдвигать точку старта). Для каждой полученной выборки определить, какая из альтернатив оказывается наиболее близкой к пользовательским ожиданиям. Получить усреднённые по всем выборам оценки альтернатив для всех способов отбора
+library(dplyr)
+
+calculate_variance_serial_full <- function(sample_data) {
+  total_variance <- var(sample_data[['Сбер Мегамаркет']], na.rm = TRUE)
+  return(total_variance)
+}
+
+random <- c(oz = 0, yam = 0, wb = 0, sber=0)
+random_repeat <- c(oz = 0, yam = 0, wb = 0, sber=0)
+mechanical <- c(oz = 0, yam = 0, wb = 0, sber=0)
+typical <- c(oz = 0, yam = 0, wb = 0, sber=0)
+typical_repeat <- c(oz = 0, yam = 0, wb = 0, sber=0)
+serial <- c(oz = 0, yam = 0, wb = 0, sber=0)
+serial_repeat <- c(oz = 0, yam = 0, wb = 0, sber=0)
+
+random_mean_mean <- c(oz = 0, yam = 0, wb = 0, sber=0)
+random_repeat_mean_mean <- c(oz = 0, yam = 0, wb = 0, sber=0)
+mechanical_mean_mean <- c(oz = 0, yam = 0, wb = 0, sber=0)
+typical_mean_mean <- c(oz = 0, yam = 0, wb = 0, sber=0)
+typical_repeat_mean_mean <- c(oz = 0, yam = 0, wb = 0, sber=0)
+serial_mean_mean <- c(oz = 0, yam = 0, wb = 0, sber=0)
+serial_repeat_mean_mean <- c(oz = 0, yam = 0, wb = 0, sber=0)
+
+random_mean_mean <- list(oz = c(), yam = c(), wb = c(), sber = c())
+random_repeat_mean_mean <- list(oz = c(), yam = c(), wb = c(), sber = c())
+mechanical_mean_mean <- list(oz = c(), yam = c(), wb = c(), sber = c())
+typical_mean_mean <- list(oz = c(), yam = c(), wb = c(), sber = c())
+typical_repeat_mean_mean <- list(oz = c(), yam = c(), wb = c(), sber = c())
+serial_mean_mean <- list(oz = c(), yam = c(), wb = c(), sber = c())
+serial_repeat_mean_mean <- list(oz = c(), yam = c(), wb = c(), sber = c())
+
+variance_results <- list(
+  random = numeric(1000),
+  random_repeat = numeric(1000),
+  mechanical = numeric(1000),
+  typical = numeric(1000),
+  typical_repeat = numeric(1000),
+  serial = numeric(1000),
+  serial_repeat = numeric(1000),
+  serial_full = numeric(1000),
+  serial_full_repeat = numeric(1000)
+)
+
+for (i in 1:1000) {
+  random_sample <- random_selection(dataset, sample_info$nr_min[1])
+  random_for_means <- calculate_means(random_sample)
+  random_mean_mean <- Map(c, random_mean_mean, random_for_means)
+
+  random_repeat_sample <- random_selection_repeat(dataset, sample_info$nr_min[2])
+  random_repeat_for_means <- calculate_means(random_repeat_sample)
+  random_repeat_mean_mean <- Map(c, random_repeat_mean_mean, random_repeat_for_means)
+
+  mechanical_sample <- mechanical_selection(dataset, sample_info$nr_min[3])
+  mechanical_for_means <- calculate_means(mechanical_sample)
+  mechanical_mean_mean <- Map(c, mechanical_mean_mean, mechanical_for_means)
+
+  typical_sample <- typical_selection(dataset, sample_info$nr_min[6])
+  typical_for_means <- calculate_means(typical_sample)
+  typical_mean_mean <- Map(c, typical_mean_mean, typical_for_means)
+
+  typical_repeat_sample <- typical_selection_repeat(dataset, sample_info$nr_min[7])
+  typical_repeat_for_means <- calculate_means(typical_repeat_sample)
+  typical_repeat_mean_mean <- Map(c, typical_repeat_mean_mean, typical_repeat_for_means)
+
+  serial_sample <- serial_selection(dataset, sample_info$nr_min[4])
+  serial_for_means <- calculate_means(serial_sample)
+  serial_mean_mean <- Map(c, serial_mean_mean, serial_for_means)
+
+  serial_repeat_sample <- serial_selection_repeat(dataset, sample_info$nr_min[5])
+  serial_repeat_for_means <- calculate_means(serial_repeat_sample)
+  serial_repeat_mean_mean <- Map(c, serial_repeat_mean_mean, serial_repeat_for_means)
+
+random_winner <- names(random_for_means)[which.min(random_for_means)]
+random_repeat_winner <- names(random_repeat_for_means)[which.min(random_repeat_for_means)]
+mechanical_winner <- names(mechanical_for_means)[which.min(mechanical_for_means)]
+typical_winner <- names(typical_for_means)[which.min(typical_for_means)]
+typical_repeat_winner <-names(typical_repeat_for_means)[which.min(typical_repeat_for_means)]
+serial_winner <- names(serial_for_means)[which.min(serial_for_means)]
+serial_repeat_winner <- names(serial_repeat_for_means)[which.min(serial_repeat_for_means)]
+random[random_winner] <- random[random_winner] + 1
+random_repeat[random_repeat_winner] <- random_repeat[random_repeat_winner] + 1
+mechanical[mechanical_winner] <- mechanical[mechanical_winner] + 1
+typical[typical_winner] <- typical[typical_winner] + 1
+typical_repeat[typical_repeat_winner] <- typical_repeat[typical_repeat_winner] + 1
+serial[serial_winner] <- serial[serial_winner] + 1
+serial_repeat[serial_repeat_winner] <- serial_repeat[serial_repeat_winner] + 1
+
+
+
+variance_results$random[i] <- calculate_variance(random_sample, 'СлучМех')
+  variance_results$random_repeat[i] <- calculate_variance(random_repeat_sample, 'СлучМех')
+  variance_results$mechanical[i] <- calculate_variance(mechanical_sample,'СлучМех')
+  variance_results$typical[i] <- calculate_variance(typical_sample , 'Тип')
+  variance_results$typical_repeat[i] <- calculate_variance(typical_repeat_sample, "Тип")
+  variance_results$serial[i] <- calculate_variance(serial_sample, "Сер")
+  variance_results$serial_repeat[i] <- calculate_variance(serial_repeat_sample, "Сер")
+  variance_results$serial_full[i] <- calculate_variance_serial_full(serial_sample)
+  variance_results$serial_full_repeat[i] <- calculate_variance_serial_full(serial_repeat_sample)
+}
+
+# Выводим результаты
+cat("Результаты случайного бесповторного отбора:\n")
+
+print(random)
+##   oz  yam   wb sber 
+##   10    0  326  664
+cat("Результаты случайного повторного отбора:\n")
+## Результаты случайного повторного отбора:
+print(random_repeat)
+##   oz  yam   wb sber 
+##    4    0  349  647
+cat("\nРезультаты механического отбора:\n")
+## 
+## Результаты механического отбора:
+print(mechanical)
+##   oz  yam   wb sber 
+##    0    0  350  650
+cat("\nРезультаты типического бесповторного отбора:\n")
+## 
+## Результаты типического бесповторного отбора:
+print(typical)
+##   oz  yam   wb sber 
+##  133    0   30  837
+cat("\nРезультаты типического повторного отбора:\n")
+## 
+## Результаты типического повторного отбора:
+print(typical_repeat)
+##   oz  yam   wb sber 
+##  104    0   19  877
+cat("\nРезультаты серийного бесповторного отбора:\n")
+## 
+## Результаты серийного бесповторного отбора:
+print(serial)
+##   oz  yam   wb sber 
+##   10    0  323  667
+cat("\nРезультаты серийного повторного отбора:\n")
+## 
+## Результаты серийного повторного отбора:
+print(serial_repeat)
+##   oz  yam   wb sber 
+##   10    0  313  677
+random_mean_avg <- sapply(random_mean_mean, mean)
+random_repeat_mean_avg <- sapply(random_repeat_mean_mean, mean)
+mechanical_mean_avg <- sapply(mechanical_mean_mean, mean)
+typical_mean_avg <- sapply(typical_mean_mean, mean)
+typical_repeat_mean_avg <- sapply(typical_repeat_mean_mean, mean)
+serial_mean_avg <- sapply(serial_mean_mean, mean)
+serial_repeat_mean_avg <- sapply(serial_repeat_mean_mean, mean)
+
+
+random_mean_var <- sapply(random_mean_mean, var)
+random_repeat_mean_var <- sapply(random_repeat_mean_mean, var)
+mechanical_mean_var <- sapply(mechanical_mean_mean, var)
+typical_mean_var <- sapply(typical_mean_mean, var)
+typical_repeat_mean_var <- sapply(typical_repeat_mean_mean, var)
+serial_mean_var <- sapply(serial_mean_mean, var)
+serial_repeat_var <- sapply(serial_repeat_mean_mean, var)
+
+print(list(
+  random_mean_avg = random_mean_avg,
+  random_repeat_mean_avg = random_repeat_mean_avg,
+  mechanical_mean_avg = mechanical_mean_avg,
+  typical_mean_avg = typical_mean_avg,
+  typical_repeat_mean_avg = typical_repeat_mean_avg,
+  serial_mean_avg = serial_mean_avg,
+  serial_repeat_mean_avg = serial_repeat_mean_avg
+))
+
+print(' ')
+
+print(list(
+  random_mean_var = random_mean_avg,
+  random_repeat_mean_var = random_repeat_mean_avg,
+  mechanical_mean_var = mechanical_mean_avg,
+  typical_mean_var = typical_mean_avg,
+  typical_repeat_mean_var = typical_repeat_mean_avg,
+  serial_mean_var = serial_mean_avg,
+  serial_repeat_mean_var = serial_repeat_mean_avg
+))
+
+cat("\nСредняя дисперсия случайного бесповторного отбора: ", mean(variance_results$random))
+cat("\nСредняя дисперсия случайного повторного отбора: ", mean(variance_results$random_repeat))
+cat("\nСредняя дисперсия маханического отбора: ", mean(variance_results$mechanical))
+cat("\nСредняя дисперсия типического бесповторного отбора: ", mean(variance_results$typical))
+cat("\nСредняя дисперсия типического повторного отбора: ", mean(variance_results$typical_repeat))
+cat("\nСредняя межгрупповая дисперсия серийного бесповторного отбора: ", mean(variance_results$serial))
+cat("\nСредняя межгрупповая дисперсия серийного повторного отбора: ", mean(variance_results$serial_repeat))
+cat("\nСредняя дисперсия серийного бесповторного отбора: ", mean(variance_results$serial_full))
+
+cat("\nСредняя дисперсия серийного повторного отбора: ", mean(variance_results$serial_full_repeat))
+
+Сопоставить эти оценки со значениями показателей рассчитанных по данным генеральной совокупности. Сделать вывод о точности и надежности методов отбора.
+Сравним с показателями “генеральной” совокупности. Выведем её
+
+head(stat)
+
+Вывод:
+Наиболее близки к среднему “генеральной” совокупности - средние для случайного бесповторного и серийного бесповторного отборов. Эти методы обеспечивают высокую точность, поскольку их средние значения и дисперсии наиболее близки к характеристикам генеральной совокупности.
+
+Не прослеживается значительная зависимость между тем, повторный отбор или бесповторный отбор, и его надежностью/достоверностью. Результаты для этих методов различаются несущественно, особенно для случайного и серийного отборов.
+
+Самый недостоверный способ, как по расчету побед, так и по расчету среднего - механический отбор.
+
+Он показал наибольшую зависимость от начальной точки и менее стабилен по сравнению с другими методами.
+
+Во всех остальных способах отбора подтверждается победитель “генеральной” совокупности - Сбер Мегамаркет. Этот бренд стабильно набирает больше побед, особенно в типическом отборе, что подтверждает его устойчивую конкурентоспособность.При отборе с учетом 𝑛∗ и 𝑟∗ истинный победитель (Сбер Мегамаркет) набирает больше побед, чем при случайном отборе 4% генеральной совокупности. Это доказывает важность оптимального размера выборки для повышения точности результатов.
+
+Дисперсия победителя (Сбер Мегамаркет) для видов отбора и генеральной совокупности схожа во всех типах отбора, кроме типического. Типический отбор показал наименьшую дисперсию, что свидетельствует о его стабильности, но может приводить к завышению средних значений для некоторых групп.
