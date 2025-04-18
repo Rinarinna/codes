@@ -1,0 +1,67 @@
+import requests
+
+salary=lambda x: [x['salary']['from'],x['salary']['to'],x['salary']['currency'],x['salary']['gross']] if x['salary'] is not None else [None]*4
+snippet=lambda x: [x['snippet']['responsibility'],x['snippet']['requirement']] if ['snippet'] is not None else [None]*2
+
+vac = []
+
+for i in range(10):
+  url='https://api.hh.ru/vacancies?text=Программист&per_page=100&area=1&area=2&page={}'.format(str(i))
+  vac+=[[x['id'],x['name']]+salary(x)+[x['employer']['name']]+[x['area']['name']]+snippet(x) for x in requests.get(url).json()['items']]
+
+vac[0]
+
+dct = {'Число вакансий дешевле 50 тыс.руб ': 0, 'Число вакансий дороже 50 тыс.руб': 0}
+n1,n2=0,0
+
+for x in vac:
+  if (x[2] is not None) and (x[4]=='RUR'):
+    if x[2]<50000:
+      n1+=1
+      dct.update({'Число вакансий дешевле 50 тыс.руб ': n1})
+    else:
+      n2+=1
+      dct.update({'Число вакансий дороже 50 тыс.руб': n2})
+
+dct
+
+print(vac[0])
+
+result_set = set()
+for elem in vac:
+  if (elem[2] is not None) and (elem[-1] is not None):
+    if (elem[2] > 50000) and ('RU' in elem[4]) and ('Python' in elem[-1]):
+      result_set.add(elem[0])
+print(result_set)
+
+for el in vac:
+  if el[0] in result_set:
+    print(el)
+
+def av_salary(x):
+  if x[2] is not None and x[3] is not None:
+    return (x[2]+x[3])/2
+  elif x[2] is not None:
+    return x[2]
+  else: return x[3]
+
+counterM = 0
+counterSP = 0
+salM=0
+salSP=0
+for el in vac:
+  if ('python' in el[1].lower()) and (el[7] == 'Москва'):
+    if (av_salary(el) is not None):
+      salM+=av_salary(el)
+      counterM+=1
+  elif ('python' in el[1].lower()) and (el[7] == 'Санкт-Петербург'):
+    if (av_salary(el) is not None):
+      salSP+=av_salary(el)
+      counterSP+=1
+
+salM=salM/counterM
+salSP=salSP/counterSP
+
+print('Moscow',round(salM) )
+print('Piter', round(salSP))
+
