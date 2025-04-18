@@ -1,0 +1,53 @@
+def oper(x,y,o):
+  if o=="+":
+    return x+y
+  elif o=="-":
+    return x-y
+  elif o=="*":
+    return x*y
+  elif o=="/":
+    if y!=0 :
+      return x/y
+    else:
+      return "Деление на 0"
+oper(5,0,"/")
+
+fact(5)
+
+func = lambda *args: sum(args)
+func(5,34,2,4)
+
+count_str = lambda char, text : text.count(char)
+count_str("a","lalalala")
+
+def func(x):
+  if x%2==0:
+    print("Чет")
+  else:
+    print("Нечет")
+
+val=int(input("Введите: "))
+while val!=0:
+  func(val)
+  val=int(input("Введите: "))
+
+def func(x):
+ if x<=0:
+  return False
+ else:
+  for i in range(2, x//2+1):
+    if x%i==0:
+      return False
+  return True
+
+func(3)
+
+import math
+
+dir(math)
+
+math.sqrt(4)
+
+from os import listdir
+listdir()
+
