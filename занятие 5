@@ -1,0 +1,87 @@
+import numpy as np
+
+matrixA = np.arange(1,13).reshape(4,3)
+
+matrixB=np.arange(13,25).reshape(4,3)
+
+matrixC = matrixA+matrixB
+matrixC
+
+matrixD = np.arange(1,13).reshape(3,4)
+matrixD
+
+mult=np.dot(matrixC,matrixD)
+mult
+
+matrix = np.random.rand(3,3)
+matrix
+
+np.linalg.det(matrix)
+
+A = np.array([[3,2],[2,-1]])
+B = np.array([5,3])
+sol=np.linalg.solve(A,B)
+sol
+
+Решение задачи методом Крамера
+
+d = np.linalg.det(A)
+
+x_A = A.copy()
+x_A[:,0] = B
+d_X = np.linalg.det(x_A)
+
+y_A = A.copy()
+y_A[:,1] = B
+d_y = np.linalg.det(y_A)
+
+
+x=d_X/d
+y=d_y/d
+
+print(x,y)
+
+y_A
+
+x_A
+
+Выкачать 1000 вакансий https://api.hh.ru/vacancies?text=Программист&per_page=100&area=1&area=2&page={}
+
+Найти среднюю зп по удаленной работе, полному дню и гибкому графику програмиистов Python
+
+Использовать numpy
+
+import requests
+
+salary = lambda x: [x['salary']['from'], x['salary']['to'], x['salary']['currency'], x['salary']['gross']] if x['salary'] is not None else [None]*4
+schedule = lambda x: [x['schedule']['name']] if ['schedule'] is not None else [None]
+
+vac=[]
+
+for i in range(10):
+  url='https://api.hh.ru/vacancies?text=Программист&per_page=100&area=1&area=2&page={}'.format(str(i))
+  vac+=[[x['id'], x['name']]+salary(x)+schedule(x) for x in requests.get(url).json()['items']]
+
+len(vac)
+
+vac[0]
+
+full=np.array([],float)
+remote=np.array([],float)
+flexible=np.array([],float)
+
+for el in vac:
+  if el[1] is not None and 'Python' in el[1] and el[4] is not None and 'RUR' in el[4] and el[2] is not None:
+    if (el[-1]) == "Полный день":
+      full = np.append(full,el[2])
+    elif (el[-1])== "Гибкий график":
+      flexible = np.append (flexible, el[2])
+    elif (el[-1]) == "Удаленная работа":
+      remote = np.append (remote, el[2])
+
+print("Полная занятость", np.mean(full))
+print("Гибкий график", np.mean(flexible))
+print("Удаленная работа", np.mean(remote))
+
+vac[0][4]
+
