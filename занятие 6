@@ -1,0 +1,78 @@
+Создать серию из 6 случайных чисел и с индексом a b c d ...
+
+products = {'Продукт': ['Картошка', 'Морковь', 'Яблоко'], 'Категория':['Овощи', 'Овощи', 'Фрукты']}
+
+prices = {'Продукт': ['Картошка', 'Морковь', 'Яблоко'], 'Цена': [50,60,120]}
+
+Создатьдва DataFrame и объединить по продуктам
+
+import pandas as pd
+import numpy as np
+
+products = {'Продукт': ['Картошка', 'Морковь', 'Яблоко'], 'Категория':['Овощи', 'Овощи', 'Фрукты']}
+prices = {'Продукт': ['Картошка', 'Морковь', 'Яблоко'], 'Цена': [50,60,120]}
+
+
+df_prod = pd.DataFrame(products)
+df_pr = pd.DataFrame(prices)
+
+mergeDF = pd.merge(df_prod, df_pr, on='Продукт')
+mergeDF
+
+random_numbers = pd.Series(np.random.randn(6), index =['a','b','c','d','e','f'])
+random_numbers
+
+Создать DataFrame df из 3х запросов к api.hh
+
+'РазработчикANDPython', 'РазработчикANDC++', 'РазработчикANDGo'
+параметр запросов: search_field=name
+по каждому запросу нужно получить максимальное количество вакансий (range 20)
+в конечном dataframe колонки должны быть поля ['id','name','area','salary', 'snippet', 'schedule']
+в конечном dataframe индекс должен состояить из натуральных чисел (неповторяющихся)
+'https://api.hh.ru/vacancies?text={0}&per_page=100&search_field=name&page={1}'
+
+host = 'https://api.hh.ru/vacancies?text={0}&per_page=100&search_field=name&page={1}'
+topics =['РазработчикANDPython', 'РазработчикANDC++', 'РазработчикANDGo']
+
+df = pd.DataFrame()
+
+import requests
+
+for top in topics:
+  for i in range(20):
+    url = host.format(top,str(i))
+    try:
+      js=requests.get(url).json()['items']
+      tmp=pd.DataFrame(js)[['id','name','area','salary','snippet','schedule']]
+      df=df.append(tmp)
+    except:
+      break
+df.index=range(df.shape[0])
+
+df.head(10)
+
+Создать новый dataframe, в котором все столбцы, содержащие json, превратились в множество столбцов с названиями "префикс.поле" и соответсовать значениям вида: id, name, salary.currency, salary.from.......
+
+выкинуть из df salary, schedule.id, area.id и area.url
+
+def explode(x):
+  values=(sum([list(y.values()) if type(y)==dict else [y] for y in x],[]))
+
+  index=sum([list(map(lambda z:y+'.'+z, list(x[y].keys()))) if type(x[y])==dict else [y] for y in x.index],[])
+
+  return pd.Series(values,index=index)
+
+
+df1=df.apply(explode, axis=1)
+
+df1.drop(columns=['salary','schedule.id','area.id', 'area.url'],inplace=True)
+
+df1.head(10)
+
+Выведим список id, названий, городов, зп (from), с удаленной работой, зп от 80 до 100 тыс по полю from (без ообработки), вакансии должны содержать язык go и python
+
+df1.loc[(df1['schedule.name']=='Удаленная работа')&(df1.name.str.contains('GO|Python'))&(df1['salary.from']>=80000)&\
+ (df1['salary.from']<=100000), ['area.name','id','name','salary.from']]
+
+
+
