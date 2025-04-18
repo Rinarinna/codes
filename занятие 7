@@ -1,0 +1,74 @@
+Построить линейный график для функции у=2x+5 на интервале от -10 до 10. Необходимо добавить подписи осей и заголовок графика
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.linspace(-10,10,100)
+y=2*x+5
+
+plt.plot(x,y , label = 'y=2x+5')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Линейный график')
+plt.grid(True)
+plt.show()
+
+Сгенерировать 1000 случайных числе (нормальное распределение) и построить гистрограмму. Добавить название осей и графика (bins=30)
+
+rdata = np.random.normal(size=1000)
+plt.hist(rdata,bins=30,edgecolor='black')
+plt.xlabel('Значения')
+plt.ylabel('Частота')
+plt.title('Гистограмма')
+plt.show()
+
+Создать dataframe из вакансий "Программист", ограничиться 100 вакансиями с указанием зп с 1ой страницы json. Отсавить поля 'id','name','from','to','currency','gross','requirement','responsibility','employer','area'. Построить средсвтами metplotlib гистограмму по from, пирожковый график по currency (кол-во вакансий на каждый вид валюты), столбиковую диаграмму по area (кол-во вакансий на каждый город). Поместить графики в одну линию (1х3). Подписать каждый график.
+
+url='https://api.hh.ru/vacancies?text=Программист&per_page=100&only_with_salary=True'
+
+import pandas as pd
+import requests
+
+url='https://api.hh.ru/vacancies?text=Программист&per_page=100&only_with_salary=True'
+js=requests.get(url).json()['items']
+df=pd.DataFrame(js)[['id','name','salary','snippet','employer','area']]
+df[:5]
+
+df1=df[['id','name']].join(df[['salary','snippet','employer','area']].apply(lambda x:x.apply(lambda y:y.values()).explode(),axis=1))
+df1[:5]
+
+cols=['id','name','from','to','currency','gross','requirement','responsibility','emp1','employer','emp2','emp3','emp4','emp5','emp6','emp7','area1','area','area2']
+df1.columns=cols
+df1[:5]
+
+df1=df1[['id','name','from','to','currency','gross','requirement','responsibility','employer','area']]
+df1[:5]
+
+fig, ax = plt.subplots(1,3, figsize=(16,5))
+df1['from'].hist(bins=[0,50000,100000,200000,400000],ax=ax[0])
+ax[0].set_title('Гистограмма ЗП')
+df1.area.value_counts().plot(kind='bar', ax=ax[1])
+ax[1].set_title('Распределение вакансий по городам')
+df1.currency.value_counts().plot(kind='pie', ax=ax[2])
+ax[2].set_title('Расределение вакансий по валютам')
+
+Построить ящик с усами распределнеия to с группировкой по валютам
+
+df1.fillna(method='ffill').boxplot(column='to', by='currency')
+
+Построить гистограмму 10 самых частых слов в названии вакансии
+
+import re
+from collections import Counter
+
+pd.DataFrame(Counter(sum(df1.name.apply(lambda x: re.findall('\w{3,}',x.lower())).tolist(),[])).most_common(10)).plot(kind='bar',x=0)
+
+Построить диаграмму рассеяния зависимости to от from и маркер *
+
+x=df1['from'].fillna(method='ffill').values
+y=df1['to'].fillna(method='ffill').values
+
+plt.scatter(x,y,marker='*')
+
+plt.show()
+
