@@ -1,0 +1,109 @@
+Класс Vacancies()
+
+Функция load(text), чтобы загрузить вакансии
+
+host='http://api.hh.ru/vacancies?per_page=100&search_field=name&only_with_salary=True'
+
+Загружать 200 вакансий
+
+Использовать json_normalize
+
+колонки id, name , area (Москва), schedule (Полный день...), from, to, currency, gross
+
+Создать экземпляр класса vac vac.load('Аналитик')
+
+vac.df[:4]
+
+id | name | area | schedule | from | to | currency | gross
+
+141414 | Аналитик Москва | Полный день | 60000 | 70000 | RUR | False
+
+import pandas as pd
+import numpy as np
+import seaborn as sns
+
+class Vacancies():
+  def load(self,text):
+    import requests
+    from pandas import DataFrame as df
+    from pandas import json_normalize
+
+    host='http://api.hh.ru/vacancies?per_page=100&search_field=name&only_with_salary=True'
+    tmp=df()
+    cols=['id','name','area','salary','schedule']
+    for i in range(2):
+      url=host+'&text={0}&page={1}'.format(text,str(i))
+      js=requests.get(url).json()['items']
+      if len(js)!=0:
+        tmp=tmp.append(df(js)[cols])
+      else:
+        break
+    tmp=tmp.join(json_normalize(tmp.salary), how='inner')
+    tmp['area']=json_normalize(tmp.area)[['name']]
+    tmp['schedule']=json_normalize(tmp.schedule)[['name']]
+    tmp.drop(columns=['salary'],inplace=True)
+    self.df=tmp
+
+vac=Vacancies()
+vac.load('Аналитик')
+
+vac.df
+
+EUR|...............|500000
+
+KZT|...............|
+
+RUR|...............|
+
+USD|...............|
+
+__ schedule _ 0
+
+Создать метод с изображением тепловой карты средней зарплаты по валюте и графику работы
+
+salary_heatmap()
+
+class Vacancies(Vacancies):
+  def salary_heatmap(self):
+    import seaborn as sns
+    tmp=self.df.groupby(['schedule','currency'])['from'].mean().reset_index()
+    tmp=tmp.pivot(index='currency', columns='schedule', values='from').fillna(0)
+    sns.heatmap(tmp)
+
+vac=Vacancies()
+vac.load('Аналитик')
+vac.salary_heatmap()
+
+Создать метод salary_violin() для отображения скрипичной диаграммы по валюте и зарплат "от"
+
+class Vacancies(Vacancies):
+  def salary_violin(self):
+    import seaborn as sns
+    sns.violinplot(x=self.df['currency'],y=self.df['to'])
+
+vac=Vacancies()
+vac.load('Учитель')
+vac.salary_violin()
+
+Создать метод catplot_salary() категориальной диаграммы рассеивания по зарплате и графику работы
+
+class Vacancies(Vacancies):
+  def catplot_salary(self):
+    import seaborn as sns
+    tmp = self.df
+    sns.catplot(data =tmp[tmp['currency']=='RUR'].fillna(0), x= 'schedule',y='to')
+
+vac=Vacancies()
+vac.load('Аналитик')
+vac.catplot_salary()
+
+class Vacancies(Vacancies):
+  def salary_box(self):
+    import plotly.express as px
+    import matplotlib.pyplot as plt
+    px.box(self.df, x= 'currency', y='from', facet_row='schedule', title='Распределение зп').show()
+
+vac=Vacancies()
+vac.load('Менеджер')
+vac.salary_box()
+
